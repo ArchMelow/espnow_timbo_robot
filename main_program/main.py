@@ -513,14 +513,6 @@ class Runner:
                     
         
                 
-'''
-main part. (modify this part to set queenness)
-'''
-
-with open('../is_queen.conf', 'r') as f:
-    queenness = f.read()
-r = Runner(is_queen=queenness)
-r.main_runner()
 
 
 
