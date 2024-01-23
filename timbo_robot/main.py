@@ -513,9 +513,10 @@ class Runner:
 main part. (modify this part to set queenness)
 '''
 
+'''
 r = Runner(is_queen=True)
 r.main_runner()
-
+'''
 
 
 
