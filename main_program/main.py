@@ -508,6 +508,7 @@ class Runner:
             
     # wrapper function for the runner()
     def main_runner(self):
+        print('queenness : ', self.mb.is_queen)
         asyncio.run(self.runner())
     
                     
