@@ -438,6 +438,10 @@ class Runner:
                         else:
                             # assume we received the msg
                             msg_obj = json.loads(self.mb.received_msg)
+                            
+                            # ignore slaves' messages
+                            if not msg_obj['is_queen']:
+                                continue
                             queen_mac = self.mb.received_mac
                             
                             if msg_obj['tag'] == 'grouping': # group with the queen
