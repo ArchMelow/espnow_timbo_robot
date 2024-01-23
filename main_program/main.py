@@ -472,13 +472,10 @@ class Runner:
             
             if self.mode == 2: # play mode
                 #print(int(self.mb.duty_memory[self.duty_mem_idx]))
-                if not self.mb.duty_memory: # no memory (empty)
+                if not self.mb.duty_memory or (self.duty_mem_idx >= len(self.mb.duty_memory)): # no memory (empty)
                     tasks = [self.button()]
                     res = await asyncio.gather(*tasks)
                 else:
-                    if self.duty_mem_idx >= len(self.mb.duty_memory):
-                        print(self.duty_mem_idx, self.mb.duty_memory)
-
                     tasks = [self.button(), self.mb.async_move_motor(int(self.mb.duty_memory[self.duty_mem_idx]))]
                     res = await asyncio.gather(*tasks)
                     #print(self.mb.adc.read())
@@ -522,6 +519,7 @@ class Runner:
 
 
     
+
 
 
 
