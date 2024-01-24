@@ -277,6 +277,8 @@ class Runner:
     
     def toggle_actions(self, mode):
         
+        self.prev_mode = mode
+        
         if mode == 0: # idle    
             # unset LED
             self.mb.led_red.value(0)
@@ -308,15 +310,6 @@ class Runner:
             print('duty mem : ', self.mb.duty_memory)
             self.mb.nSleep(True)
         
-        elif mode == 3: # record and play (unreachable by the user button input)
-                    
-            # set yellow LED
-            self.mb.led_red.value(1)
-            self.mb.led_green.value(1)
-                    
-            self.motor_mem_cnt = 0 # reset the counter
-            self.mb.duty_memory = []
-            self.mb.nSleep(True) # enable the motor
                     
         print(f'mode changed to {mode}')
         
@@ -354,11 +347,9 @@ class Runner:
     async def runner(self):
         # button/motor based interaction
         # functionalities (each task by index):
-        # task 0. record (with the button & motor)
-        # task 1. play (with the button & motor)
-        # task 2. activate STA and espnow and receive messages with timeout & grouping/ungrouping/syncing (while button is pressed) 
-        # locks for each task (since there only runs one task at a time)
-        
+        # task 0. grouping (with the button)
+        # task 1. recording 
+        # task 2. playing  
         # keep the network alive.
         '''
         if not self.mb.is_queen:
@@ -375,6 +366,15 @@ class Runner:
         
         # main routine
         while True:
+            
+            
+            # when button is not pressed and the mode changed to 3, change the LED state.
+            if self.prev_mode != self.mode and self.mode == 3:
+                self.prev_mode = 3
+                # orange
+                self.mb.led_red.value(1)
+                self.mb.led_red.value(1)
+            
             
             if self.mode == 0: # idle mode
                 tasks = [self.button()]
@@ -403,7 +403,12 @@ class Runner:
                                 self.mb.e.send(None, json.dumps({'tag':'distribute',
                                                                  'is_queen':True,
                                                                  'net_table':hex_net_table}))
+                                # toggle the LED (red)
+                                self.mb.led_red.value(1)
+                                self.mb.led_red.value(0)
+                                
                                 self.mode = 1 # change to recording mode
+                                
                             
                             
                         else: # grouping / ungrouping
@@ -502,17 +507,12 @@ class Runner:
                     self.mb.duty_memory.append(self.cur_duty)
                 self.motor_mem_cnt = (self.motor_mem_cnt + 1) % 301
                     
-                    
                 
-                
-                
-                
-            
     # wrapper function for the runner()
     def main_runner(self):
         print('queenness : ', self.mb.is_queen)
         asyncio.run(self.runner())
-        
+    
                 
 
 
