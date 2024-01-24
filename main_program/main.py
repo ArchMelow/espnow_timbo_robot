@@ -512,14 +512,7 @@ class Runner:
     def main_runner(self):
         print('queenness : ', self.mb.is_queen)
         asyncio.run(self.runner())
-    
-                    
-with open('../is_queen.conf', 'r') as f:
-    data_read = f.read()
-    queenness = True if data_read == 'True' else False
-
-r = Runner(is_queen=queenness)
-r.main_runner()        
+        
                 
 
 
