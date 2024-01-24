@@ -40,8 +40,8 @@ class BlockIODevices:
         self.is_queen = is_queen
         
         # basic IO Pin initialization 
-        self.led_red = Pin(20, Pin.OUT)
-        self.led_green = Pin(19, Pin.OUT)
+        self.led_red = Pin(19, Pin.OUT)
+        self.led_green = Pin(20, Pin.OUT)
         self.which_led = 0
         self.bttn = Pin(35, Pin.IN, Pin.PULL_UP)
         self.backward_motor = Pin(33, Pin.OUT)
@@ -272,7 +272,54 @@ class Runner:
                 self.mode = 2 # job done
                 self.mb.received_msg = None
                 self.mb.received_mac = None # clear the buffer
-                
+    
+    
+    
+    def toggle_actions(self, mode):
+        
+        if mode == 0: # idle    
+            # unset LED
+            self.mb.led_red.value(0)
+            self.mb.led_green.value(0)
+                    
+            self.mb.stop_motor() # turn off the motor
+        
+        elif mode == 1: # record
+            self.mb.stop_motor()
+                    
+            # set red LED
+            self.mb.led_red.value(1)
+            self.mb.led_green.value(0)
+                    
+            self.mb.duty_memory = [] # reset 
+        
+        elif mode == 2: # turn on the motor
+                    
+            # set green LED
+            self.mb.led_red.value(0)
+            self.mb.led_green.value(1)
+                    
+            if len(self.mb.net_table) > 1:
+                # multicast to peers to change the mode to 2 (play)
+                self.mb.e.send(None, json.dumps({'tag':'play',
+                                                'is_queen':self.mb.is_queen}))
+            self.duty_mem_idx = 0 # reset the counter
+            self.motor_update_cnt = 0
+            print('duty mem : ', self.mb.duty_memory)
+            self.mb.nSleep(True)
+        
+        elif mode == 3: # record and play (unreachable by the user button input)
+                    
+            # set yellow LED
+            self.mb.led_red.value(1)
+            self.mb.led_green.value(1)
+                    
+            self.motor_mem_cnt = 0 # reset the counter
+            self.mb.duty_memory = []
+            self.mb.nSleep(True) # enable the motor
+                    
+        print(f'mode changed to {mode}')
+        
             
             
                 
@@ -288,6 +335,8 @@ class Runner:
             print('bttn off - toggled')
             self.longpress_cnt = 0
             self.mode = (self.mode + 1) % 3 if self.mode < 3 else 0
+            self.toggle_actions(self.mode)
+            #print('led change : ', self.mb.led_green.value(), self.mb.led_red.value())
         elif not bttn_val and not self.prev_bttn:
             #if self.mode == 2:
                 #self.mb.sync_move_motor(int(self.mb.duty_memory[self.duty_mem_idx]))
@@ -326,50 +375,6 @@ class Runner:
         
         # main routine
         while True:
-            
-            # if mode changed
-            if self.mode != self.prev_mode:
-                self.prev_mode = self.mode
-                if self.mode == 0: # idle
-                    
-                    # unset LED
-                    self.mb.led_red.value(0)
-                    self.mb.led_green.value(0)
-                    
-                    self.mb.stop_motor() # turn off the motor
-                elif self.mode == 1: # record
-                    self.mb.stop_motor()
-                    
-                    # set red LED
-                    self.mb.led_red.value(1)
-                    self.mb.led_green.value(0)
-                    
-                    self.mb.duty_memory = [] # reset 
-                elif self.mode == 2: # turn on the motor
-                    
-                    # set green LED
-                    self.mb.led_red.value(0)
-                    self.mb.led_green.value(1)
-                    
-                    if len(self.mb.net_table) > 1:
-                        # multicast to peers to change the mode to 2 (play)
-                        self.mb.e.send(None, json.dumps({'tag':'play',
-                                                         'is_queen':self.mb.is_queen}))
-                    self.duty_mem_idx = 0 # reset the counter
-                    self.motor_update_cnt = 0
-                    print('duty mem : ', self.mb.duty_memory)
-                    self.mb.nSleep(True)
-                elif self.mode == 3: # record and play (unreachable by the user button input)
-                    
-                    # set yellow LED
-                    self.mb.led_red.value(1)
-                    self.mb.led_green.value(1)
-                    
-                    self.motor_mem_cnt = 0 # reset the counter
-                    self.mb.duty_memory = []
-                    self.mb.nSleep(True) # enable the motor
-                    
-                print(f'mode changed to {self.mode}')
             
             if self.mode == 0: # idle mode
                 tasks = [self.button()]
@@ -509,18 +514,12 @@ class Runner:
         asyncio.run(self.runner())
     
                     
-        
+with open('../is_queen.conf', 'r') as f:
+    data_read = f.read()
+    queenness = True if data_read == 'True' else False
+
+r = Runner(is_queen=queenness)
+r.main_runner()        
                 
-
-
-
-
-
-
-
-    
-
-
-
 
 
