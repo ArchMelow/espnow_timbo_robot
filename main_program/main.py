@@ -75,6 +75,7 @@ class BlockIODevices:
         self.received_duty = 0
         self.queen_mac = None
         
+        
         # espnow and STA instance
         self.sta = network.WLAN(network.STA_IF)
         self.e = espnow.ESPNow()
@@ -170,14 +171,16 @@ class BlockIODevices:
         # for every cycle
         # if current read adc value diff is larger than 10 compared to the previous adc, add to mem
         if (len(self.duty_memory) < self.duty_mem_limit):
-            if self.mem_counter == 440 and abs(self.prev_rec - adc) < 3500:
+            if self.mem_counter == 40 and abs(self.prev_rec - adc) < 3500:
                 self.duty_memory.append(adc)
+                '''
                 if self.is_queen and len(self.net_table) > 1: # if this is queen in the record mode, send the duty value to the group
                     self.e.send(None, json.dumps({'tag':'duty',
                                                   'is_queen':True,
                                                   'val':adc}))
+                '''
             self.prev_rec = adc
-            self.mem_counter = (self.mem_counter + 1) % 441 # increment counter    
+            self.mem_counter = (self.mem_counter + 1) % 41 # increment counter    
             
             
             
@@ -224,6 +227,8 @@ class Runner:
         # motor counter
         self.duty_mem_idx = 0
         self.motor_update_cnt = 0
+        
+        self.led_tup = (0,0)
         
         # record and play at the same time. (mode 3)
         self.motor_mem_cnt = 0
@@ -310,7 +315,8 @@ class Runner:
             print('duty mem : ', self.mb.duty_memory)
             self.mb.nSleep(True)
         
-                    
+        self.led_tup = (self.mb.led_red.value(), self.mb.led_green.value())      
+        print('ch..',self.mb.led_red.value(), self.mb.led_green.value())
         print(f'mode changed to {mode}')
         
             
@@ -367,6 +373,7 @@ class Runner:
         # main routine
         while True:
             
+            #print('ordch..',self.mb.led_red.value(), self.mb.led_green.value())
             
             # when button is not pressed and the mode changed to 3, change the LED state.
             if self.prev_mode != self.mode and self.mode == 3:
@@ -514,5 +521,7 @@ class Runner:
         asyncio.run(self.runner())
     
                 
+
+
 
 
