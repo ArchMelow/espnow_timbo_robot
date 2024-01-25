@@ -167,7 +167,7 @@ class BlockIODevices:
             
         # save duty error to previous duty error
         self.prev_duty_error = duty_error
-        self.dummy_pin.value(0)
+        #self.dummy_pin.value(0)
         #self.dummy_pin.value(0)
         #print('move motor end well')
             
@@ -178,7 +178,13 @@ class BlockIODevices:
         # if current read adc value diff is larger than 10 compared to the previous adc, add to mem
         if (len(self.duty_memory) < self.duty_mem_limit):
             if self.mem_counter == 45 and abs(self.prev_rec - adc) < 3500:
-                self.recorded_adc = adc
+                self.duty_memory.append(adc)
+                if self.is_queen and len(self.net_table) > 1: # if this is queen in the record mode, send the duty value to the group
+                    # takes approx. 2.5ms to send
+                    self.e.send(None, json.dumps({'tag':'duty',
+                                                      'is_queen':True,
+                                                      'val':adc}))
+                    
                 
             self.prev_rec = adc
             self.mem_counter = (self.mem_counter + 1) % 46 # increment counter
@@ -285,6 +291,8 @@ class Runner:
                     self.mb.received_mac = None
                 if json_msg['tag'] == 'duty':
                     self.mb.received_duty = int(json_msg['val']) # save the duty sent from the queen (some values could be ignored by the slave!)
+                    self.mb.duty_memory.append(self.mb.received_duty)
+                    #print('duty changed')
                     self.mb.received_msg = None
                     self.mb.received_mac = None # clear the buffer
                 if json_msg['tag'] == 'idle':
@@ -297,6 +305,9 @@ class Runner:
                         
                     
             if json_msg['tag'] == 'play':
+                
+                self.mb.dummy_pin.value(1)
+                
                 self.mode = 2 # job done
                 self.prev_mode = 2 # prevent the msg ('play') sent from this device
                 
@@ -309,12 +320,19 @@ class Runner:
                 self.duty_mem_idx = 0 # reset the counter
                 self.motor_update_cnt = 0
                 self.mb.nSleep(True)
-                
+            
+                self.mb.dummy_pin.value(0)
+            
+                '''
+                print(f'duty mem len :{len(self.mb.duty_memory)}')
                 print(f'duty mem: {self.mb.duty_memory}')
+                '''
                 
                 self.mb.received_msg = None
                 self.mb.received_mac = None # clear the buffer
-    
+                
+            
+                
 
         
                     
@@ -365,7 +383,7 @@ class Runner:
             self.mb.e.irq(self.recv_cb_slave)
         
         # some time for the callback to settle
-        await asyncio.sleep_ms(100)
+        sleep_ms(100)
         
         # main routine
         while True:
@@ -419,20 +437,22 @@ class Runner:
                         
                     if len(self.mb.net_table) > 1:
                         # multicast to peers to change the mode to 2 (play)
-                        self.mb.dummy_pin.value(1) # how many time send?
+                        #self.mb.dummy_pin.value(1) # how many time send?
                         self.mb.e.send(None, json.dumps({'tag':'play',
                                                         'is_queen':self.mb.is_queen}))
-                        self.mb.dummy_pin.value(0)
+                        #self.mb.dummy_pin.value(0)
                     
                     self.duty_mem_idx = 0 # reset the counter
                     self.motor_update_cnt = 0
-                    print('duty mem : ', self.mb.duty_memory)
+                    #print('duty mem len : ', len(self.mb.duty_memory))
+                    #print('duty mem : ', self.mb.duty_memory)
                     self.mb.nSleep(True)
                 
                 
                 # when button is not pressed and the mode changed to 3, change the LED state.
                 if self.mode == 3:
                     print('mode changed to 3')
+                    self.mb.duty_memory = [] # reset
                     # orange
                     self.mb.led_red.value(1)
                     self.mb.led_green.value(1)
@@ -454,7 +474,7 @@ class Runner:
                     if self.mb.is_queen:
                         
                         
-                        await asyncio.sleep_ms(1500) # wait 1.5s (listen)
+                        sleep_ms(1500) # wait 1.5s (listen)
                         # if queen received None, one-to-all
                         # if queen received something, grouping
                         # think of other cases
@@ -499,7 +519,7 @@ class Runner:
                         # send grouping message
                         self.mb.e.send(b'\xff'*6, json.dumps({'tag':'grouping', 'is_queen':self.mb.is_queen}))
                         # if queen mac addr is in net table, ungroup/ else group
-                        await asyncio.sleep_ms(3500) # wait 3.5s (expect button async)
+                        sleep_ms(3500) # wait 3.5s (expect button async)
                         
                         # if no received message, queen was not pressed at the same time (approx.).
                         if self.mb.received_msg is None:
@@ -542,15 +562,7 @@ class Runner:
                 await self.mb.record_motor()
                 if self.longpress_cnt == 700:
                     print('bttn held for long time.. do nothing')
-                if self.motor_mem_cnt >= 45:
-                    self.mb.duty_memory.append(self.mb.recorded_adc)
-                    if self.mb.is_queen and len(self.mb.net_table) > 1: # if this is queen in the record mode, send the duty value to the group
-                        self.mb.e.send(None, json.dumps({'tag':'duty',
-                                                      'is_queen':True,
-                                                      'val':self.mb.recorded_adc}))
-                    self.motor_mem_cnt = 0
-                self.motor_mem_cnt = (self.motor_mem_cnt + 1) % 46
-            
+                
             if self.mode == 2: # play mode
                 
                 if not self.mb.duty_memory or (self.duty_mem_idx >= len(self.mb.duty_memory)): # no memory (empty)
@@ -561,7 +573,7 @@ class Runner:
                     #print(self.mb.adc.read())
                     if self.longpress_cnt == 700:
                         print('bttn held for long time.. do nothing')
-                    if self.motor_update_cnt >= 45:
+                    if self.motor_update_cnt >= 45: # play one motor value every 45ms
                         self.duty_mem_idx = (self.duty_mem_idx + 1) % len(self.mb.duty_memory)
                         self.motor_update_cnt = 0
                         #print(self.mb.adc.read())
@@ -570,11 +582,11 @@ class Runner:
             if self.mode == 3: # record and play mode
                 await self.button()
                 await self.mb.async_move_motor(int(self.cur_duty))
+                #print('duty ', int(self.cur_duty))
                 if self.longpress_cnt == 700:
                     print('bttn held for long time.. do nothing')
-                if self.motor_mem_cnt >= 45: # record and play
+                if self.motor_mem_cnt >= 45: # record and play (every 45ms)
                     self.cur_duty = self.mb.received_duty # update the duty
-                    self.mb.duty_memory.append(self.mb.received_duty)
                 self.motor_mem_cnt = (self.motor_mem_cnt + 1) % 46
             
                 
@@ -586,6 +598,11 @@ class Runner:
         print('queenness : ', self.mb.is_queen)
         asyncio.run(self.runner())
     
+                
+
+
+
+
 
 
 
