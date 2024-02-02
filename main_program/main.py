@@ -264,15 +264,23 @@ class Runner:
                 self.motor_update_cnt = 0
                 self.mb.nSleep(True)
                 
+                # set timer for playing recorded memory
+                self.p_flag = 0   #LEE
+                self.mb.timer.init(period=40, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
+                
                 self.mb.received_msg = None
                 self.mb.received_mac = None # clear the buffer
-                
+            
+            if json_msg['tag'] == 'idle':
+                self.mode = 0
+                self.mb.received_msg = None
+                self.mb.received_mac = None
+     
 
     def recv_cb_slave(self, e):
         while True:
             mac,msg = e.irecv(0)
             if msg is None:
-#                return
                 break    
             self.mb.callback_pin.value(1)
             print(f'received {msg} from the callback')
@@ -285,6 +293,7 @@ class Runner:
                     for m in new_table:
                         if m not in self.mb.net_table:
                             self.mb.e.add_peer(m)
+                            self.mb.net_table.append(m) # add m to the net table
                     print(f'slave net table : {self.mb.net_table}')
                     self.mb.received_msg = None
                     self.mb.received_mac = None # clear the buffer
@@ -304,57 +313,26 @@ class Runner:
                     self.mb.received_mac = None
  
             
-                if json_msg['tag'] == 'play':
-                
-                    self.mb.dummy_pin.value(1)
-                
-                    self.mode = 2 # job done
-                    self.prev_mode = 2 # prevent the msg ('play') sent from this device
-                
-                    # set green LED
-                    self.mb.led_red.value(0)
-                    self.mb.led_green.value(1)
-                                               
-                    self.duty_mem_idx = 0 # reset the counter
-                    self.motor_update_cnt = 0
-                    self.mb.nSleep(True)
-            
-                    self.mb.dummy_pin.value(0)
-                    self.mb.received_msg = None
-                    self.mb.received_mac = None # clear the buffer
-
-            self.mb.callback_pin.value(0)                        
-            '''                    
-
-                    
             if json_msg['tag'] == 'play':
-                
-                self.mb.dummy_pin.value(1)
-                
+                    
                 self.mode = 2 # job done
                 self.prev_mode = 2 # prevent the msg ('play') sent from this device
                 
                 # set green LED
                 self.mb.led_red.value(0)
                 self.mb.led_green.value(1)
-                
-                
-                
+                                               
                 self.duty_mem_idx = 0 # reset the counter
                 self.motor_update_cnt = 0
                 self.mb.nSleep(True)
             
-                self.mb.dummy_pin.value(0)
-
-
-                print(f'duty mem len :{len(self.mb.duty_memory)}')
-                print(f'duty mem: {self.mb.duty_memory}')
- 
-                
+                # set timer for playing recorded memory
+                self.p_flag = 0   #LEE
+                self.mb.timer.init(period=40, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
+                    
                 self.mb.received_msg = None
                 self.mb.received_mac = None # clear the buffer
-                
-            '''           
+
                
     
     async def button(self):
@@ -425,13 +403,11 @@ class Runner:
                             
                     self.mb.stop_motor() # turn off the motor
                     
-                    # if this is the queen
-                    if self.mb.is_queen:
-                        # only if the net table is not empty
-                        if len(self.mb.net_table) > 1:                
-                            #await asyncio.sleep_ms(100)
-                            # multicast to slaves
-                            self.mb.e.send(None, json.dumps({'tag':'idle', 'is_queen':True}))
+                    if len(self.mb.net_table) > 1:                
+                        #await asyncio.sleep_ms(100)
+                        # multicast to slaves
+                        self.mb.e.send(None, json.dumps({'tag':'idle', 'is_queen':self.mb.is_queen}))
+                    
                     if self.prev_mode == 2: #LEE
                         self.mb.timer.deinit()
                         
@@ -471,7 +447,7 @@ class Runner:
                     self.duty_mem_idx = 0 # reset the counter
                     self.motor_update_cnt = 0
                     #print('duty mem len : ', len(self.mb.duty_memory))
-                    #print('duty mem : ', self.mb.duty_memory)
+                    print('duty mem : ', self.mb.duty_memory)
                     self.mb.nSleep(True)
    
                     self.p_flag = 0   #LEE
@@ -636,3 +612,7 @@ class Runner:
 
 
              
+
+
+
+
