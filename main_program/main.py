@@ -104,6 +104,9 @@ class BlockIODevices:
         #self.net_table = load_network_table('net_table.txt', self.net_dict) if init_flag else create_network_table('net_table.txt', self.net_dict)
         self.end_connection()
         
+        
+        self.timer = Timer(1)  #LEE
+        
     def start_connection(self):
         # from the documentation 
         self.sta.active(True)
@@ -125,7 +128,7 @@ class BlockIODevices:
        
     async def async_move_motor(self, cur_value):
         self.move_motor(cur_value)
-        asyncio.sleep(0.00001) # 0.01 ms
+        asyncio.sleep(0.000001) # 0.01 ms
     
     def sync_move_motor(self, cur_value):
         self.move_motor(cur_value)
@@ -189,10 +192,7 @@ class BlockIODevices:
             self.prev_rec = adc
             self.mem_counter = (self.mem_counter + 1) % 46 # increment counter
             
-            
-        
-        
-        
+           
 
     def is_led_red_on(self):
         return self.led_red.value()
@@ -238,7 +238,9 @@ class Runner:
         
         # record and play at the same time. (mode 3)
         self.motor_mem_cnt = 0
-        self.cur_duty = 0 
+        self.cur_duty = 0
+        
+        self.p_flag = 0  #LEE
         
     def recv_cb_queen(self, e):
         while True:
@@ -270,7 +272,8 @@ class Runner:
         while True:
             mac,msg = e.irecv(0)
             if msg is None:
-                return
+#                return
+                break    
             self.mb.callback_pin.value(1)
             print(f'received {msg} from the callback')
             self.mb.received_msg = bytes(msg.decode().replace('\x00', '').encode('utf-8'))
@@ -299,10 +302,30 @@ class Runner:
                     self.mode = 0
                     self.mb.received_msg = None
                     self.mb.received_mac = None
-            self.mb.callback_pin.value(0)
-        
-                    
-                        
+ 
+            
+                if json_msg['tag'] == 'play':
+                
+                    self.mb.dummy_pin.value(1)
+                
+                    self.mode = 2 # job done
+                    self.prev_mode = 2 # prevent the msg ('play') sent from this device
+                
+                    # set green LED
+                    self.mb.led_red.value(0)
+                    self.mb.led_green.value(1)
+                                               
+                    self.duty_mem_idx = 0 # reset the counter
+                    self.motor_update_cnt = 0
+                    self.mb.nSleep(True)
+            
+                    self.mb.dummy_pin.value(0)
+                    self.mb.received_msg = None
+                    self.mb.received_mac = None # clear the buffer
+
+            self.mb.callback_pin.value(0)                        
+            '''                    
+
                     
             if json_msg['tag'] == 'play':
                 
@@ -322,21 +345,17 @@ class Runner:
                 self.mb.nSleep(True)
             
                 self.mb.dummy_pin.value(0)
-            
-                '''
+
+
                 print(f'duty mem len :{len(self.mb.duty_memory)}')
                 print(f'duty mem: {self.mb.duty_memory}')
-                '''
+ 
                 
                 self.mb.received_msg = None
                 self.mb.received_mac = None # clear the buffer
                 
-            
-                
-
-        
-                    
-                
+            '''           
+               
     
     async def button(self):
         #if self.mode == 2:
@@ -362,7 +381,11 @@ class Runner:
         sleep_ms(1) # 10ms
         
     
+    def periodic_interrupt(self,timer):  #LEE
+       
+        self.p_flag = 1
     
+     
     
     
     async def runner(self):
@@ -409,6 +432,9 @@ class Runner:
                             #await asyncio.sleep_ms(100)
                             # multicast to slaves
                             self.mb.e.send(None, json.dumps({'tag':'idle', 'is_queen':True}))
+                    if self.prev_mode == 2: #LEE
+                        self.mb.timer.deinit()
+                        
             
                 if self.mode == 1: # record
                     self.mb.stop_motor()
@@ -447,7 +473,10 @@ class Runner:
                     #print('duty mem len : ', len(self.mb.duty_memory))
                     #print('duty mem : ', self.mb.duty_memory)
                     self.mb.nSleep(True)
-                
+   
+                    self.p_flag = 0   #LEE
+                    self.mb.timer.init(period=40, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
+                    
                 
                 # when button is not pressed and the mode changed to 3, change the LED state.
                 if self.mode == 3:
@@ -570,15 +599,20 @@ class Runner:
                 else:
                     await self.button()
                     await self.mb.async_move_motor(int(self.mb.duty_memory[self.duty_mem_idx]))
-                    #print(self.mb.adc.read())
                     if self.longpress_cnt == 700:
                         print('bttn held for long time.. do nothing')
+                    '''
                     if self.motor_update_cnt >= 45: # play one motor value every 45ms
                         self.duty_mem_idx = (self.duty_mem_idx + 1) % len(self.mb.duty_memory)
                         self.motor_update_cnt = 0
                         #print(self.mb.adc.read())
                     self.motor_update_cnt = (self.motor_update_cnt + 1) % 46
-            
+                    ''' 
+                    if self.p_flag == 1:      #LEE
+                        self.duty_mem_idx = (self.duty_mem_idx + 1) % len(self.mb.duty_memory)
+                        self.p_flag = 0
+
+
             if self.mode == 3: # record and play mode
                 await self.button()
                 await self.mb.async_move_motor(int(self.cur_duty))
@@ -597,37 +631,8 @@ class Runner:
     def main_runner(self):
         print('queenness : ', self.mb.is_queen)
         asyncio.run(self.runner())
-    
-                
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+             
