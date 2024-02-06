@@ -4,7 +4,9 @@
 #import webrepl
 #webrepl.start()
 import machine
+from machine import Pin
 from main_program.main import Runner
+from utime import sleep_ms
 import os
 import network
 import binascii
@@ -17,6 +19,16 @@ from app.ota_updater import OTAUpdater
 
 
 print('boot start')
+
+
+# global LED Pin
+led_red = Pin(19, Pin.OUT)
+led_green = Pin(20, Pin.OUT)
+
+def free_sta(sta_if):
+    sta_if.disconnect()
+    sta_if.active(False)
+    sta_if = None
 
 
 def boot_with_update():
@@ -36,6 +48,9 @@ def boot_with_update():
             print('connecting to network in the configuration...')
             sta_if.active(True)
             
+            scanned = sta_if.scan()
+            #print('scanned : ', scanned)
+
 
             # read from the conf (file exists)
             with open('./wifi/wifi.conf', 'r') as f:
@@ -47,23 +62,56 @@ def boot_with_update():
                 return
             
             print(wifi_conf)
+            
+            # check if ssid is in the scanned list.
+            # if not, reconfigure wifi. (AP changed)
+            ssids = [tup[0].decode('utf-8') for tup in scanned]
+            if wifi_conf['ssid'] not in ssids:
+                ssid, pwd = configure_wifi()
+                json_dict = dict()
+                json_dict['ssid'] = ssid
+                json_dict['pwd'] = pwd
+                with open('./wifi/wifi.conf', 'w') as f:
+                    f.write(json.dumps(json_dict))
+                free_sta(sta_if)
+                return
+                
+                
+            
             sta_if.connect(wifi_conf['ssid'],
                            wifi_conf['pwd'])
             
             print('Connecting...')
+            timeout_cnt = 0
             while not sta_if.isconnected():
                 pass
         
         ota_updater = OTAUpdater('https://github.com/ArchMelow/espnow_timbo_robot',
                                  main_dir = 'main_program')
+
+        '''
         has_updated = ota_updater.install_update_if_available()
         if has_updated:
             machine.reset()
         else:
             del(ota_updater)
             gc.collect()
-            
-            
+        '''
+        
+        try:
+            has_updated = ota_updater.install_update_if_available()
+            if has_updated:
+                machine.reset()
+            else:
+                del(ota_updater)
+                gc.collect()
+        except:
+            print('OTA update failed.')
+        
+        
+        
+        free_sta(sta_if)
+                
         
 
 
@@ -182,9 +230,15 @@ boot_with_update()
 
 with open('is_queen.conf', 'r') as f:
     data_read = f.read()
-    queenness = True if data_read == 'True' else False
+    print(data_read)
+    queenness = True if data_read.strip() == 'True' else False
 
-r = Runner(is_queen=queenness)
+
+r = Runner(queenness)
 r.main_runner()
+
+
+
+
 
 
