@@ -120,7 +120,7 @@ def del_wifi_conf():
     if 'wifi.conf' in os.listdir('./wifi'):
         os.remove('./wifi/wifi.conf')
 
-def web_page():
+def web_page(access_ip_str = ""):
     html_page = '''
                 <!DOCTYPE html>
         <html lang="en">
@@ -142,11 +142,19 @@ def web_page():
 
                 <input type="submit" value="Submit">
             </form>
-
+            <br><br>
+            
+            <form action="/end" method="post">
+                <input type="submit" value="end">
+            </form>
+            
+            <br><br>
+            <pre>{access_ip_str}</pre>
+            
         </body>
         </html>
 
-    '''
+    '''.format(access_ip_str = access_ip_str)
     return html_page
     
 def configure_wifi():
@@ -174,8 +182,9 @@ def configure_wifi():
     # server listening
     
     ssid_value = None; password_value = None
+    access_ip_str = ""; ip = None
     
-    while ssid_value is None and password_value is None:
+    while True:
     
     
         conn, addr = s.accept()
@@ -195,21 +204,52 @@ def configure_wifi():
         ssid_pattern = re.compile(r'ssid=([^\s]+)')
         password_pattern = re.compile(r'password=([^\s]+)')
 
-        # Use the regular expressions to extract values
         ssid_match = ssid_pattern.search(request)
         password_match = password_pattern.search(request)
 
-        # Check if matches are found
+        # end the server.
+        if request.find('end') != -1:
+            break
+
+
         if ssid_match and password_match:
             ssid_value = ssid_match.group(1)
             password_value = password_match.group(1)
 
             print("SSID:", ssid_value)
             print("Password:", password_value)
+            # attempt to connect for a while
+            sta_if = network.WLAN(network.STA_IF)
+            if sta_if.active():
+                sta_if.disconnect()
+                sta_if.active(False)
+            
+            sta_if.active(True)
+            sta_if.connect(ssid_value, password_value)
+            while sta_if.isconnected():
+                pass
+            # for the connection to settle to retrieve IP, this is necessary!
+            ipconf = sta_if.ifconfig()
+            while ipconf and ipconf[0] == '0.0.0.0':
+                ipconf = sta_if.ifconfig()
+                sleep_ms(100) # sleep every 100ms
+            print(ipconf)    
+                
+            if ipconf:
+                ip = ipconf[0]
+            sta_if.disconnect()
+            sta_if.active(False)
+            sta_if = None
+            
+            if ip:
+                access_addr = ip + ':80'
+                print(access_addr)
+                access_ip_str = f"By long pressing your button on mode 3, reach this server at {access_addr}"
+            
         else:
             print("SSID or Password not found in the provided data.")
             
-        response = web_page()
+        response = web_page(access_ip_str)
         conn.send('HTTP/1.1 200 OK\n')
         conn.send('Content-Type: text/html\n')
         conn.send('Connection: close\n')
@@ -236,9 +276,3 @@ with open('is_queen.conf', 'r') as f:
 
 r = Runner(queenness)
 r.main_runner()
-
-
-
-
-
-
