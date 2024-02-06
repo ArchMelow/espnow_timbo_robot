@@ -191,7 +191,7 @@ class BlockIODevices:
         adc = self.adc.read()
         # index for the currently used memory index
         i = self.cur_mem_idx
-        print(i)
+        # print(i)
         # for every cycle
         # if current read adc value diff is larger than 10 compared to the previous adc, add to mem
         if (len(self.duty_memories[i]) < self.duty_mem_limit):
