@@ -1,4 +1,4 @@
-from machine import Pin, ADC, PWM, Timer, enable_irq, disable_irq
+from machine import Pin, ADC, PWM, Timer, enable_irq, disable_irq, reset
 from utime import sleep_ms, sleep, ticks_ms, ticks_diff
 import asyncio
 from asyncio import Lock
@@ -17,8 +17,8 @@ TODO :
 - load network table from file
 - save network table to file
 - load motor data from file 
-- download motor data from the https server (mode 3)
-- add OTA update functionality to the https server (mode 3)
+- download motor data from the https server (mode 3) - done
+- add OTA update functionality to the https server (mode 3) -> model and main.py
 
 '''
 
@@ -191,21 +191,21 @@ class BlockIODevices:
         adc = self.adc.read()
         # index for the currently used memory index
         i = self.cur_mem_idx
-        # print(i)
         # for every cycle
         # if current read adc value diff is larger than 10 compared to the previous adc, add to mem
         if (len(self.duty_memories[i]) < self.duty_mem_limit):
-            if self.mem_counter == 45 and abs(self.prev_rec - adc) < 3500:
+            if self.mem_counter == 120 and abs(self.prev_rec - adc) < 3500:
                 self.duty_memories[i].append(adc)
                 if self.is_queen and len(self.net_table) > 1: # if this is queen in the record mode, send the duty value to the group
                     # takes approx. 2.5ms to send
+                    self.prev_rec = adc
                     self.e.send(None, json.dumps({'tag':'duty',
                                                       'is_queen':True,
                                                       'val':adc}))
                     
                 
             self.prev_rec = adc
-            self.mem_counter = (self.mem_counter + 1) % 46 # increment counter
+            self.mem_counter = (self.mem_counter + 1) % 121 # increment counter
     
     
     # save motor data as a file (duty.dat)
@@ -292,7 +292,7 @@ class Runner:
                 
                 # set timer for playing recorded memory
                 self.p_flag = 0   #LEE
-                self.mb.timer.init(period=40, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
+                self.mb.timer.init(period=121, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
                 
                 self.mb.received_msg = None
                 self.mb.received_mac = None # clear the buffer
@@ -387,10 +387,16 @@ class Runner:
     
     def web_page(self,file_contents=""):
     
-        mem = ["1,2,3,4,5","2,3,4","6,5,4","3,6,8,4","2,5,8,5"]
+        mem = []
+        for arr in self.mb.duty_memories:
+            if arr:
+                joined_arr = '\'' + ','.join([str(a) for a in arr]) + '\''
+            else:
+                joined_arr = '\'empty\'' # empty string
+            mem.append(joined_arr)
+        print(mem)
         
-        
-        html_page = """<!DOCTYPE html>
+        html_page = f"""<!DOCTYPE html>
         <html>
         <head>
             <title>File Upload</title>
@@ -414,6 +420,24 @@ class Runner:
                 <input type="submit" value="Upload and Display">
             </form>
             <br><br>
+            <h3>OTA Updater</h3>
+            <br><br>
+            <b>main program updater</b>
+            <p>select the main.py file you wish to install on the device.</p>
+            <form action="/update" method="post" enctype="multipart/form-data">
+                <input type="file" name="file">
+                <br><br>
+                <input type="submit" value="update main program">
+            </form>
+            <br><br>
+            <b>model updater</b>
+            <p>select a model, and the model will be automatically uploaded to the device.</p>
+            <form action="/model" method="post" enctype="multipart/form-data">
+                <input type="file" name="file">
+                <br><br>
+                <input type="submit" value="update model">
+            </form>
+            <br><br>
             <h3>End Server</h3>
             <form action="/end" method="post">
                 <input type="submit" value="end">
@@ -430,11 +454,11 @@ class Runner:
             <br><br>
             <h3>Download Motor Memory</h3>
             <form action="/download_motor" method="post">
-                <input type="button" onclick="downloadFile('1,2,3,4,5', 'file1.txt')" value="mem 1">
-                <input type="button" onclick="downloadFile('2,3,4', 'file2.txt')" value="mem 2">
-                <input type="button" onclick="downloadFile('6,5,4', 'file3.txt')" value="mem 3">
-                <input type="button" onclick="downloadFile('3,6,8,4', 'file4.txt')" value="mem 4">
-                <input type="button" onclick="downloadFile('2,5,8,5', 'file5.txt')" value="mem 5">
+                <input type="button" onclick="downloadFile({mem[0]}, 'file1.txt')" value="mem 1">
+                <input type="button" onclick="downloadFile({mem[1]}, 'file2.txt')" value="mem 2">
+                <input type="button" onclick="downloadFile({mem[2]}, 'file3.txt')" value="mem 3">
+                <input type="button" onclick="downloadFile({mem[3]}, 'file4.txt')" value="mem 4">
+                <input type="button" onclick="downloadFile({mem[4]}, 'file5.txt')" value="mem 5">
             </form>
             <br>
             <br>
@@ -442,7 +466,7 @@ class Runner:
             <pre>{file_contents}</pre>
         </body>
         </html>
-        """.format(file_contents=file_contents)
+        """
         
         return html_page
 
@@ -483,7 +507,7 @@ class Runner:
 
         end_flag = False
 
-        while not end_flag:
+        while True:
             conn, addr = s.accept()
             print("Got connection from %s" % str(addr))
 
@@ -506,7 +530,6 @@ class Runner:
             #print(request)
 
             if method == 'POST' and path == '/end':
-                end_flag = True
                 conn.close()
                 conn = None
                 self.mb.sta.disconnect()
@@ -534,7 +557,8 @@ class Runner:
                 print(f'save slot changed to {self.mb.cur_mem_idx}')
                 response = self.web_page()
 
-            if method == 'POST' and path == '/upload':
+            if (method == 'POST' and path == '/upload') or \
+               (method == 'POST' and path == '/update'):
                 
                 content_length = 0
                 for line in request.decode().split('\r\n'):
@@ -546,23 +570,27 @@ class Runner:
 
                 s1 = cl_file.readline() # FIRST LINE
                 s2 = cl_file.readline() # SECOND LINE
-                filename = s2.decode().split(';')[-1].split('=')[-1]
-                filename = filename[1:-3].strip()
+                
+                if path == '/upload':
+                    filename = s2.decode().split(';')[-1].split('=')[-1]
+                    filename = filename[1:-3].strip()
+                if path == '/update': # update main.py
+                    filename = './main_program/temp.py'
+                    
                 print('filename : ', filename)
 
+                # MUST HANDLE THE CASE WHERE STREAM IS EMPTY(FILENAME CANNOT BE FETCHED)
                 if not filename:
                     print('no file to upload.')
                     continue
                 
-                
-                # MUST HANDLE THE CASE WHERE STREAM IS EMPTY(FILENAME CANNOT BE FETCHED)
                 with open(filename, 'wb') as f:
                     write_cnt = 0
                     # read first four lines.
                     
                     s3 = cl_file.readline() # THIRD LINE
                     s4 = cl_file.readline() # FOURTH LINE
-                    print(s1, s2, s3, s4)
+            
                     write_cnt += (len(s1) + len(s2) + len(s3) + len(s4))
                     if s3.decode().split(':')[-1].strip() == 'text/plain':
                         print('plain text file downloading.')
@@ -572,6 +600,17 @@ class Runner:
                         if line[6:24] == b'WebKitFormBoundary':
                             break
                         f.write(line)
+                        
+                # finished update (main.py), reset the machine in this case.
+                if path == '/update':
+                    conn.close()
+                    conn = None
+                    self.mb.sta.disconnect()
+                    self.mb.sta.active(False)
+                    sleep_ms(1000)
+                    self.mb.sta.active(True)
+                    gc.collect()
+                    reset()
                     
                 
                 # Extract the file content from the POST data
@@ -694,7 +733,7 @@ class Runner:
                     self.mb.nSleep(True)
    
                     self.p_flag = 0   #LEE
-                    self.mb.timer.init(period=40, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
+                    self.mb.timer.init(period=121, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
                     
                     
                 # when button is not pressed and the mode changed to 3, change the LED state.
@@ -835,9 +874,9 @@ class Runner:
                 #print('duty ', int(self.cur_duty))
                 if self.longpress_cnt == 700:
                     print('bttn held for long time.. do nothing')
-                if self.motor_mem_cnt >= 45: # record and play (every 45ms)
+                if self.motor_mem_cnt >= 120: # record and play (every 120ms)
                     self.cur_duty = self.mb.received_duty # update the duty
-                self.motor_mem_cnt = (self.motor_mem_cnt + 1) % 46
+                self.motor_mem_cnt = (self.motor_mem_cnt + 1) % 121
                 
                 
                 
@@ -847,8 +886,8 @@ class Runner:
                 sleep_ms(1000)
                 self.mb.sta.active(True) # this doesn't matter
                 '''
+     
                 
-          
     # wrapper function for the runner()
     def main_runner(self):
         print('queenness : ', self.mb.is_queen)
