@@ -11,6 +11,16 @@ import binascii
 import socket
 import gc
 
+'''
+TODO :
+
+- load network table from file
+- save network table to file
+- load motor data from file 
+- download motor data from the https server (mode 3)
+
+'''
+
 
 # create a network table, for the first time.
 def create_network_table(filename, net_dict):
@@ -180,6 +190,7 @@ class BlockIODevices:
         adc = self.adc.read()
         # index for the currently used memory index
         i = self.cur_mem_idx
+        print(i)
         # for every cycle
         # if current read adc value diff is larger than 10 compared to the previous adc, add to mem
         if (len(self.duty_memories[i]) < self.duty_mem_limit):
@@ -377,6 +388,7 @@ class Runner:
     
         mem = ["1,2,3,4,5","2,3,4","6,5,4","3,6,8,4","2,5,8,5"]
         
+        
         html_page = """<!DOCTYPE html>
         <html>
         <head>
@@ -462,7 +474,8 @@ class Runner:
         # open a socket server
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
-
+        
+        print(self.mb.sta.ifconfig())
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(addr)
         s.listen(1)  # only one device accessible
@@ -533,10 +546,15 @@ class Runner:
                 s1 = cl_file.readline() # FIRST LINE
                 s2 = cl_file.readline() # SECOND LINE
                 filename = s2.decode().split(';')[-1].split('=')[-1]
-                filename = filename[1:-3]
-                print(filename)
+                filename = filename[1:-3].strip()
+                print('filename : ', filename)
 
-
+                if not filename:
+                    print('no file to upload.')
+                    continue
+                
+                
+                # MUST HANDLE THE CASE WHERE STREAM IS EMPTY(FILENAME CANNOT BE FETCHED)
                 with open(filename, 'wb') as f:
                     write_cnt = 0
                     # read first four lines.
@@ -828,7 +846,7 @@ class Runner:
                 sleep_ms(1000)
                 self.mb.sta.active(True) # this doesn't matter
                 '''
-                
+   
                 
     # wrapper function for the runner()
     def main_runner(self):
