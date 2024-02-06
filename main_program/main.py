@@ -18,6 +18,7 @@ TODO :
 - save network table to file
 - load motor data from file 
 - download motor data from the https server (mode 3)
+- add OTA update functionality to the https server (mode 3)
 
 '''
 
@@ -846,8 +847,8 @@ class Runner:
                 sleep_ms(1000)
                 self.mb.sta.active(True) # this doesn't matter
                 '''
-   
                 
+          
     # wrapper function for the runner()
     def main_runner(self):
         print('queenness : ', self.mb.is_queen)
