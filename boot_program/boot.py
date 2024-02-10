@@ -14,7 +14,7 @@ import re
 import json
 import app
 import gc # garbage collection
-from app.ota_updater import OTAUpdater
+
 
 
 print('boot start')
@@ -72,7 +72,6 @@ def boot_with_update():
                 json_dict['pwd'] = pwd
                 with open('./wifi/wifi.conf', 'w') as f:
                     f.write(json.dumps(json_dict))
-                free_sta(sta_if)
                 return
                 
                 
