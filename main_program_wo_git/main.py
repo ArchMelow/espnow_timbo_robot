@@ -11,6 +11,7 @@ import binascii
 import socket
 import gc
 
+
 '''
 TODO :
 
@@ -52,6 +53,7 @@ class BlockIODevices:
         # block device Queen or Slave?
         self.is_queen = is_queen
         
+        
         # basic IO Pin initialization 
         self.led_red = PWM(Pin(19, Pin.OUT))
         self.led_green = PWM(Pin(20, Pin.OUT))
@@ -60,6 +62,8 @@ class BlockIODevices:
         self.set_led_color('none') # defaults to mode 0
         
         self.which_led = 0
+        self.cpu_on_pin = Pin(8, Pin.OUT)
+        self.cpu_on_pin.value(1) 
         self.bttn = Pin(35, Pin.IN, Pin.PULL_UP)
         self.backward_motor = Pin(33, Pin.OUT)
         self.forward_motor = Pin(32, Pin.OUT)
@@ -86,6 +90,9 @@ class BlockIODevices:
         
         # recording motor values
         self.prev_rec = -1 # first value has to be recorded (adc could not be negative)
+        
+        # kill itself if there was no user-interaction for a while
+        self.kill_timer = 0
         
         
         # received flag/message for the callback
@@ -186,7 +193,7 @@ class BlockIODevices:
         
         
         
-    async def record_motor(self):
+    async def record_motor(self, flag):
         # overwrite (until the memory is full)
         adc = self.adc.read()
         # index for the currently used memory index
@@ -199,7 +206,8 @@ class BlockIODevices:
                 if self.is_queen and len(self.net_table) > 1: # if this is queen in the record mode, send the duty value to the group
                     # takes approx. 2.5ms to send
                     self.prev_rec = adc
-                    self.e.send(None, json.dumps({'tag':'duty',
+                    if flag:
+                        self.e.send(None, json.dumps({'tag':'duty',
                                                       'is_queen':True,
                                                       'val':adc}))
                     
@@ -218,8 +226,12 @@ class BlockIODevices:
                     if i < len(lst) - 1:
                         f.write(',')
                 f.write('\n') # add newline
-            
-        
+    
+    def block_power_if_idle(self):
+        if self.kill_timer and self.kill_timer %200000 == 0:  #10000:20 sec, 200000
+            print('Power off for saving battery')
+            sleep_ms(1000)
+            self.cpu_on_pin.value(0)
     
     
     ### LED color manipulation using PWM ###
@@ -301,7 +313,18 @@ class Runner:
                 self.mode = 0
                 self.mb.received_msg = None
                 self.mb.received_mac = None
-     
+            if json_msg['tag'] == 'record':
+                self.mode = 1
+                self.prev_mode = 1 # mode 4 not triggered from the slave (IMPORTANT)
+                # set red LED
+                self.mb.set_led_color('r')     
+                self.duty_mem_idx = 0 # reset the counter
+                self.motor_update_cnt = 0
+                i = self.mb.cur_mem_idx
+                self.mb.duty_memories[i] = [] # empty memory
+                
+                self.mb.received_msg = None
+                self.mb.received_mac = None
 
     def recv_cb_slave(self, e):
         while True:
@@ -354,7 +377,7 @@ class Runner:
             
                 # set timer for playing recorded memory
                 self.p_flag = 0   #LEE
-                self.mb.timer.init(period=40, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
+                self.mb.timer.init(period=121, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
                     
                 self.mb.received_msg = None
                 self.mb.received_mac = None # clear the buffer
@@ -665,12 +688,25 @@ class Runner:
         # some time for the callback to settle
         sleep_ms(100)
         
+        
+        queen_record_flag = False
+        # see if the mode was changed to recording mode by the queen
+        
+        
         # main routine
         while True:
             
+            self.mb.block_power_if_idle()
+                
             ########## checking when mode is changed  #######################################
             
+            # mode change means interaction, or there is something going on (espnow communication)
+            # reset the kill timer of the device
+            
             if self.prev_mode != self.mode:
+            
+                self.mb.kill_timer = 0
+                queen_record_flag = False # reset the flag
             
                 print(f'mode {self.prev_mode} to {self.mode}')
                 
@@ -706,13 +742,11 @@ class Runner:
                     self.mb.duty_memories[i] = [] # reset
                     self.motor_mem_cnt = 0
                     
-                    # if this is the queen
-                    if self.mb.is_queen:
-                        # only if the net table is not empty
-                        if len(self.mb.net_table) > 1:                
-                            #await asyncio.sleep_ms(100)
-                            # multicast to slaves
-                            self.mb.e.send(None, json.dumps({'tag':'record', 'is_queen':True}))
+                    if len(self.mb.net_table) > 1:                
+                        #await asyncio.sleep_ms(100)
+                        # multicast to slaves
+                        queen_record_flag = True
+                        self.mb.e.send(None, json.dumps({'tag':'record', 'is_queen':True}))
                               
                 
                 if self.mode == 2: # turn on the motor
@@ -734,6 +768,13 @@ class Runner:
    
                     self.p_flag = 0   #LEE
                     self.mb.timer.init(period=121, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
+                    
+                
+                if self.mode == 3:
+                    print('mode changed to 3')
+                    self.mb.set_led_color('y')
+                    self.mb.nSleep(False)
+                    
                     
                     
                 # when button is not pressed and the mode changed to 3, change the LED state.
@@ -842,7 +883,7 @@ class Runner:
                 
             if self.mode == 1: # record mode
                 await self.button()
-                await self.mb.record_motor()
+                await self.mb.record_motor(queen_record_flag)
                 if self.longpress_cnt == 700:
                     print('bttn held for long time.. do nothing')
                 
@@ -879,16 +920,19 @@ class Runner:
                 self.motor_mem_cnt = (self.motor_mem_cnt + 1) % 121
                 
                 
-                
+               
                 
                 '''
                 self.mb.sta.active(False)
                 sleep_ms(1000)
                 self.mb.sta.active(True) # this doesn't matter
                 '''
-     
+            self.mb.kill_timer += 1
                 
     # wrapper function for the runner()
     def main_runner(self):
         print('queenness : ', self.mb.is_queen)
         asyncio.run(self.runner())
+
+
+
