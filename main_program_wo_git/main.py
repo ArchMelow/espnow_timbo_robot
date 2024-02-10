@@ -201,7 +201,7 @@ class BlockIODevices:
         # for every cycle
         # if current read adc value diff is larger than 10 compared to the previous adc, add to mem
         if (len(self.duty_memories[i]) < self.duty_mem_limit):
-            if self.mem_counter == 120 and abs(self.prev_rec - adc) < 3500:
+            if self.mem_counter == 30 and abs(self.prev_rec - adc) < 3500:
                 self.duty_memories[i].append(adc)
                 if self.is_queen and len(self.net_table) > 1: # if this is queen in the record mode, send the duty value to the group
                     # takes approx. 2.5ms to send
@@ -213,7 +213,7 @@ class BlockIODevices:
                     
                 
             self.prev_rec = adc
-            self.mem_counter = (self.mem_counter + 1) % 121 # increment counter
+            self.mem_counter = (self.mem_counter + 1) % 31 # increment counter
     
     
     # save motor data as a file (duty.dat)
@@ -304,7 +304,7 @@ class Runner:
                 
                 # set timer for playing recorded memory
                 self.p_flag = 0   #LEE
-                self.mb.timer.init(period=121, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
+                self.mb.timer.init(period=50, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
                 
                 self.mb.received_msg = None
                 self.mb.received_mac = None # clear the buffer
@@ -377,7 +377,7 @@ class Runner:
             
                 # set timer for playing recorded memory
                 self.p_flag = 0   #LEE
-                self.mb.timer.init(period=121, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
+                self.mb.timer.init(period=50, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
                     
                 self.mb.received_msg = None
                 self.mb.received_mac = None # clear the buffer
@@ -767,7 +767,7 @@ class Runner:
                     self.mb.nSleep(True)
    
                     self.p_flag = 0   #LEE
-                    self.mb.timer.init(period=121, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
+                    self.mb.timer.init(period=50, mode=Timer.PERIODIC, callback=self.periodic_interrupt)
                     
                 
                 if self.mode == 3:
@@ -915,9 +915,9 @@ class Runner:
                 #print('duty ', int(self.cur_duty))
                 if self.longpress_cnt == 700:
                     print('bttn held for long time.. do nothing')
-                if self.motor_mem_cnt >= 120: # record and play (every 120ms)
+                if self.motor_mem_cnt >= 30: # record and play (every 120ms)
                     self.cur_duty = self.mb.received_duty # update the duty
-                self.motor_mem_cnt = (self.motor_mem_cnt + 1) % 121
+                self.motor_mem_cnt = (self.motor_mem_cnt + 1) % 31
                 
                 
                
@@ -933,6 +933,8 @@ class Runner:
     def main_runner(self):
         print('queenness : ', self.mb.is_queen)
         asyncio.run(self.runner())
+
+
 
 
 
