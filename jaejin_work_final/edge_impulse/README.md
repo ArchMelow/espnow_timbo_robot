@@ -1,13 +1,16 @@
 Edge Impulse와 연결하는 코드는 실제 블록 구동 코드에는 들어가지 않지만, jaejin_work_final/edge_impulse 폴더 안의 boot.py 파일을 CommBlockCode/boot.py 파일과 바꿔주신 후 테스트 해보실 수 있습니다. 
 
+
 [과정]
+
 0. edge impulse 계정을 만들고, 빈 프로젝트를 하나 생성합니다.
 1. edge-impulse-data-forwarder를 다운로드 받습니다.
 
 (**주의 !! 2, 3, 4번은 반드시 순서대로 진행되어야 합니다. 나중에 수정하실 때 코드를 간단하게 읽어보시길 바랍니다.**)
+(**주의 !! 3번 과정에서 사용하는 커뮤니케이션 블록의 boot.py에서의 net_table 변수를 2번 과정의 모션 블록의 MAC address를 확인하고 바꿔 주세요.**)
 
 2. 사용하지 않으시는 다른 모션 블록의 main_program/main.py 파일을 jaejin_work_final/edge_impulse/motion_block_replace_code 안의 main.py 파일로 교체하고, 이 모션 블록의 코드를 **먼저** 실행시킵니다.
-3. boot.py 파일을 위에서 말한 대로 교체하고, 커뮤니케이션 블록을 부팅합니다. (boot.py에 있는 내용에서 적절히 바꾸면 좋은 부분은 while 문에서 시리얼 데이터를 보내는 주기를 정하는 sleep_ms(몇ms) 부분입니다.)
+3. boot.py 파일을 위에서 말한 대로 교체하고, 커뮤니케이션 블록을 부팅합니다. (boot.py에 있는 내용에서 적절히 바꾸면 좋은 부분은 while 문에서 시리얼 데이터를 보내는 주기를 정하는 sleep_ms(몇ms) 부분입니다.) 
 4. 2번에서 설정한 모션 블록을 버튼을 눌러 mode 3으로 이동시킵니다. 이 시점부터 ESPNow를 통해 모션블록이 커뮤니케이션 블록에 센서 데이터 메시지를 보내고, 커뮤니케이션 블록은 받은 센서 데이터를 시리얼 메시지로 컴퓨터에 보내게 됩니다.
 5. 아래 그림과 같이 터미널에서 edge-impulse-data-forwarder를 입력합니다. baudrate = 115200 입니다.
    ![image](https://github.com/ArchMelow/espnow_timbo_robot/assets/100942304/d68be12b-1630-4595-8461-1ca43e598ff2)
