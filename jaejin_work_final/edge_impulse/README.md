@@ -7,6 +7,7 @@ Edge Impulse와 연결하는 코드는 실제 블록 구동 코드에는 들어�
 1. edge-impulse-data-forwarder를 다운로드 받습니다.
 
 (**주의 !! 2, 3, 4번은 반드시 순서대로 진행되어야 합니다. 나중에 수정하실 때 코드를 간단하게 읽어보시길 바랍니다.**)
+
 (**주의 !! 3번 과정에서 사용하는 커뮤니케이션 블록의 boot.py에서의 net_table 변수를 2번 과정의 모션 블록의 MAC address를 확인하고 바꿔 주세요.**)
 
 2. 사용하지 않으시는 다른 모션 블록의 main_program/main.py 파일을 jaejin_work_final/edge_impulse/motion_block_replace_code 안의 main.py 파일로 교체하고, 이 모션 블록의 코드를 **먼저** 실행시킵니다.
